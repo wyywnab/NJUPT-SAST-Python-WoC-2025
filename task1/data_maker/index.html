@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>超分数据集制作工具</title>
+    <!-- 引入 Cropper.js 样式 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: flex; height: 100vh; background-color: #2c3e50; color: white; }
+        
+        /* 左侧图片区域 */
+        #image-container { flex: 1; background: #000; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        img { max-width: 100%; max-height: 100%; display: block; }
+
+        /* 右侧控制栏 */
+        #sidebar { width: 300px; background: #34495e; padding: 20px; display: flex; flex-direction: column; box-shadow: -2px 0 5px rgba(0,0,0,0.3); }
+        
+        h2 { margin-top: 0; font-size: 18px; color: #ecf0f1; border-bottom: 1px solid #7f8c8d; padding-bottom: 10px; }
+        
+        .info-panel { margin-bottom: 20px; font-size: 14px; color: #bdc3c7; }
+        .info-item { margin: 5px 0; display: flex; justify-content: space-between; }
+        .highlight { color: #f1c40f; font-weight: bold; }
+
+        .btn-group { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+        button { padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        
+        .btn-process { background-color: #27ae60; color: white; }
+        .btn-process:hover { background-color: #2ecc71; }
+        
+        .btn-skip { background-color: #e67e22; color: white; }
+        .btn-skip:hover { background-color: #d35400; }
+
+        .progress { margin-top: 10px; font-size: 12px; text-align: center; color: #95a5a6; }
+
+        /* Loading 遮罩 */
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 999; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <!-- 图片显示区域 -->
+    <div id="image-container">
+        <img id="image" src="" alt="待处理图片">
+    </div>
+
+    <!-- 侧边栏 -->
+    <div id="sidebar">
+        <h2>数据集处理工具</h2>
+        
+        <div class="info-panel">
+            <div class="info-item">当前文件: <span id="filename" class="highlight">加载中...</span></div>
+            <div class="info-item">进度: <span id="progress-text">0 / 0</span></div>
+        </div>
+
+        <div class="info-panel">
+            <p>操作说明：</p>
+            <ul style="padding-left: 20px; margin: 0;">
+                <li>拖拽框选最大可用范围</li>
+                <li>系统自动缩放至 2K</li>
+                <li>自动切分为 256px (HR)</li>
+                <li>自动下采样为 128px (LR)</li>
+            </ul>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-process" onclick="processCurrent()">✨ 确认并处理 (Enter)</button>
+            <button class="btn-skip" onclick="nextImage()">⏭ 跳过此图 (Space)</button>
+        </div>
+        <div class="progress" id="status-msg">准备就绪</div>
+    </div>
+
+    <div id="loading"><div class="spinner"></div></div>
+
+    <!-- 引入 JS 库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script>
+        let images = [];
+        let currentIndex = 0;
+        let cropper = null;
+        const imageEl = document.getElementById('image');
+        const filenameEl = document.getElementById('filename');
+        const progressEl = document.getElementById('progress-text');
+        const statusEl = document.getElementById('status-msg');
+        const loadingEl = document.getElementById('loading');
+
+        // 初始化：获取图片列表
+        async function init() {
+            try {
+                const res = await fetch('/api/images');
+                images = await res.json();
+                if (images.length === 0) {
+                    alert("source_images 文件夹为空！");
+                    return;
+                }
+                loadCurrentImage();
+            } catch (e) {
+                console.error(e);
+                alert("无法连接服务器");
+            }
+        }
+
+        // 加载当前图片
+        function loadCurrentImage() {
+            if (currentIndex >= images.length) {
+                alert("所有图片处理完毕！");
+                imageEl.src = "";
+                if(cropper) cropper.destroy();
+                return;
+            }
+
+            const fname = images[currentIndex];
+            filenameEl.innerText = fname;
+            progressEl.innerText = `${currentIndex + 1} / ${images.length}`;
+            statusEl.innerText = "等待操作...";
+
+            // 销毁旧的 cropper
+            if (cropper) {
+                cropper.destroy();
+            }
+
+            // 设置新图片源
+            imageEl.src = `/images/${fname}`;
+            
+            // 图片加载完成后初始化 Cropper
+            imageEl.onload = () => {
+                cropper = new Cropper(imageEl, {
+                    viewMode: 1, // 限制裁剪框不超过画布
+                    dragMode: 'move',
+                    autoCropArea: 0.9, // 默认选中 90%
+                    restore: false,
+                    guides: true,
+                    center: true,
+                    highlight: false,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    toggleDragModeOnDblclick: false,
+                });
+            };
+        }
+
+        // 处理当前图片
+        async function processCurrent() {
+            if (!cropper) return;
+            
+            loadingEl.style.display = 'flex';
+            const cropData = cropper.getData(); // 获取裁剪区域坐标
+            const fname = images[currentIndex];
+
+            try {
+                const res = await fetch('/api/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: fname,
+                        crop: cropData
+                    })
+                });
+                
+                const result = await res.json();
+                if (result.status === 'success') {
+                    statusEl.innerText = `成功! 生成了 ${result.patches_created} 个块`;
+                    // 稍微延迟一下自动下一张
+                    setTimeout(() => {
+                        loadingEl.style.display = 'none';
+                        nextImage();
+                    }, 500);
+                } else {
+                    alert("处理出错: " + result.message);
+                    loadingEl.style.display = 'none';
+                }
+            } catch (e) {
+                console.error(e);
+                alert("网络请求失败");
+                loadingEl.style.display = 'none';
+            }
+        }
+
+        // 下一张
+        function nextImage() {
+            currentIndex++;
+            loadCurrentImage();
+        }
+
+        // 快捷键支持
+        document.addEventListener('keydown', (e) => {
+            if (loadingEl.style.display === 'flex') return;
+            
+            if (e.code === 'Enter') {
+                processCurrent();
+            } else if (e.code === 'Space') {
+                e.preventDefault(); // 防止页面滚动
+                nextImage();
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
