@@ -26,7 +26,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', type=str, default='test')
     parser.add_argument('--output', type=str, default='results')
-    parser.add_argument('--model', type=str, default='exp/exp260128_160539/best_model_epoch_93.pth')
+    parser.add_argument('--model', type=str, default='best_model.pth')
     parser.add_argument('--scale', type=int, default=2)
     args = parser.parse_args()
 
