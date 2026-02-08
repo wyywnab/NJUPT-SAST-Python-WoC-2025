@@ -1,0 +1,28 @@
+# Hyperparameters
+seed: 608
+num_workers: 2
+
+scale_factor: 2
+
+batch_size: 16
+learning_rate: 0.0001
+num_epochs: 100
+
+criterion: "L1Loss"
+
+optimizer: "AdamW"
+weight_decay: 0.01
+momentum: 0.9   # for SGD optimizer
+
+scheduler: "CosineAnnealingLR"
+# for CosineAnnealingLR
+t_max: 50
+eta_min: 1e-6
+# for StepLR
+step_size: 30
+gamma: 0.1
+
+# Early Stopping
+patience: 20
+min_delta: 0.0001
+
