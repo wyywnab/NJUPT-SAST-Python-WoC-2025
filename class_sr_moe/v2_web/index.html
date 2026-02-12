@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adaptive SR - Pro Web</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f7; color: #333; }
+        h1 { text-align: center; color: #1d1d1f; margin-bottom: 30px; }
+        
+        .panel { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); margin-bottom: 24px; }
+        
+        /* 进度条 */
+        .progress-container { margin: 15px 0; }
+        .progress-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9em; font-weight: 600; color: #555; }
+        .progress-detail { font-size: 0.8em; color: #888; font-weight: normal; }
+        .progress-bar-bg { width: 100%; height: 8px; background: #ebebeb; border-radius: 4px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: #007aff; width: 0%; transition: width 0.1s linear; }
+        .progress-bar-fill.success { background: #34c759; }
+        .progress-bar-fill.error { background: #ff3b30; }
+
+        /* 拖放与控制区 */
+        .controls { margin-top: 30px; }
+        
+        #drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 16px;
+            padding: 40px 20px;
+            text-align: center;
+            transition: all 0.2s;
+            background: #fff;
+            cursor: pointer;
+        }
+        #drop-area.highlight { border-color: #007aff; background: #f0f8ff; }
+        #drop-area p { margin: 10px 0 0; color: #888; font-size: 0.9em; }
+
+        input[type="file"] { display: none; }
+        
+        .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: #007aff; color: white; border-radius: 30px; cursor: pointer; font-weight: 600; transition: all 0.2s; opacity: 0.6; pointer-events: none; box-shadow: 0 4px 12px rgba(0,122,255,0.3); text-decoration: none; border: none; font-size: 1rem; }
+        .btn.active { opacity: 1; pointer-events: auto; }
+        .btn:hover { background: #005bb5; transform: translateY(-1px); }
+        .btn-success { background: #34c759; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3); }
+        .btn-success:hover { background: #248a3d; }
+
+        /* 结果展示 */
+        .canvas-container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; margin-top: 30px; }
+        .canvas-box { text-align: center; flex: 1; min-width: 300px; display: flex; flex-direction: column; align-items: center; }
+        .canvas-box h4 { margin-bottom: 15px; color: #666; }
+        canvas { max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); background: #eee; image-rendering: pixelated; margin-bottom: 15px; }
+        
+        /* 日志 */
+        #log { font-family: 'SF Mono', Consolas, monospace; font-size: 0.8em; color: #666; height: 120px; overflow-y: auto; background: #fafafa; padding: 15px; border-radius: 12px; border: 1px solid #eee; margin-top: 20px; line-height: 1.5; }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px dashed #eee; padding-bottom: 2px; }
+    </style>
+</head>
+<body>
+    <h1>Adaptive SR System Web</h1>
+
+    <div class="panel">
+        <div class="progress-info">
+            <span id="status-title">System Status</span>
+            <span id="status-detail" class="progress-detail">Initializing...</span>
+        </div>
+        <div class="progress-container">
+            <div class="progress-bar-bg">
+                <div id="model-progress" class="progress-bar-fill"></div>
+            </div>
+        </div>
+        <div id="log"></div>
+    </div>
+
+    <!-- 拖放区域 -->
+    <div class="controls">
+        <div id="drop-area">
+            <input type="file" id="file-upload" accept="image/*">
+            <label for="file-upload" id="upload-btn" class="btn">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"></path></svg>
+                Select Image
+            </label>
+            <p>or drag and drop image here</p>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <div class="canvas-box">
+            <h4>Original</h4>
+            <canvas id="canvas-input"></canvas>
+        </div>
+        <div class="canvas-box">
+            <h4>Super Resolution (x2)</h4>
+            <canvas id="canvas-output"></canvas>
+            <!-- 下载按钮 -->
+            <button id="download-btn" class="btn btn-success" style="display: none;">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Save Image
+            </button>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
