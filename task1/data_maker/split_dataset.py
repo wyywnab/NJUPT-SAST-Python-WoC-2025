@@ -11,9 +11,9 @@ SRC_HR = os.path.join(SOURCE_ROOT, 'HR')
 SRC_LR = os.path.join(SOURCE_ROOT, 'LR')
 
 # 划分比例 (和必须为 1.0)
-RATIO_TRAIN = 0.7  # 80% 训练
-RATIO_VAL   = 0.15  # 10% 验证
-RATIO_TEST  = 0.15  # 10% 测试
+RATIO_TRAIN = 0.7
+RATIO_VAL   = 0.15
+RATIO_TEST  = 0.15
 
 # 随机种子 (保证每次运行打乱的结果一致，方便复现)
 RANDOM_SEED = 42
