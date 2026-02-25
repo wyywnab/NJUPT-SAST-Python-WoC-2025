@@ -45,7 +45,7 @@
 pip install -r requirements.txt 
 ```
 
-数据集：[https://huggingface.co/datasets/wyywn/sast_python_woc](https://huggingface.co/datasets/wyywn/sast_python_woc)
+数据集：[sast_python_woc_dataset.7z](https://wyywn.site/onemanager/public/sast_python_woc_dataset.7z)
 
 注：每个task均为独立项目，需要在每个项目project目录下单独运行
 
@@ -73,11 +73,11 @@ task1 & task2：
 
 多任务 v2 fused：
 
-| 项目        | 版本      |
-| ----------- | --------- |
-| PyTorch     | -         |
-| torchvision | -         |
-| CUDA        | 12.8      |
-| GPU Driver  | -         |
-| GPU         | RTX 4090D |
+| 项目        | 版本                      |
+| ----------- | ------------------------- |
+| PyTorch     | 2.8.0+cu128               |
+| torchvision | 0.23.0+cu128              |
+| CUDA        | 12.8                      |
+| GPU Driver  | 580.105.08                |
+| GPU         | NVIDIA GeForce RTX 4090 D |
 
