@@ -63,9 +63,10 @@ Web demo：[v2_web](v2_web)
   - *anime*：网络收集的高质量图片，带有丰富细节
 
   - *landscape*：DIV2K节选
-
-
-  - *text*：网页、PPT、PDF截图
+  
+  
+    - *text*：网页、PPT、PDF截图
+  
 
 ### 1. 分类
 
@@ -119,9 +120,9 @@ graph TD
     SelectedIndices --> GroupByClass["Group batch indices<br> by unique class"]
 
     subgraph ExpertProcessing [Expert SR Networks]
-        Expert0["SRExpert 0<br>(scale_factor=scale)"] --> Out0
-        Expert1["SRExpert 1<br>(scale_factor=scale, num_res_blocks=32)"] --> Out1
-        Expert2["SRExpert 2<br>(scale_factor=scale)"] --> Out2
+        Expert0["SR Expert 0<br>(scale_factor=scale)"] --> Out0
+        Expert1["SR Expert 1<br>(scale_factor=scale, num_res_blocks=32)"] --> Out1
+        Expert2["SR Expert 2<br>(scale_factor=scale)"] --> Out2
     end
 
     GroupByClass -- "class 0 indices" --> Expert0
@@ -141,7 +142,7 @@ graph TD
     Return[("Return<br>(final_output, class_logits)")]
 ```
 
-*说明：v2版本对SRExpert 1的num_res_blocks数量翻倍处理为32（v1版本为16）*
+*说明：v2版本对 SR Expert 1 的 num_res_blocks 数量翻倍处理为32（v1版本为16）*
 
 ## 指标
 

@@ -29,6 +29,10 @@
   4. 把HR图片缩小到128×128，使用BICUBIC算法，作为LR图片
   5. 自动划分数据为70%训练，15%验证，15%测试
 
+## 指标
+
+测试集平均PSNR 43.25 dB
+
 ## 网络结构
 
 ### Residual Block
@@ -71,6 +75,3 @@ graph TD
     TailConv --> Output[("Output<br>(H\*scale × W\*scale × C)")]
 ```
 
-## 指标
-
-测试集平均PSNR 43.25 dB
