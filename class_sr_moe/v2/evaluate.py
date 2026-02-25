@@ -3,7 +3,7 @@ import csv
 import os
 import random
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -332,6 +332,37 @@ def evaluate_sr_random(sr_model: AdaptiveSRSystem, dataset: FusedSRDatasetWithPa
     return finalize_metrics(stats)
 
 
+def evaluate_sr_fixed_expert(sr_model: AdaptiveSRSystem, dataset: FusedSRDatasetWithPaths, device: torch.device,
+                             num_workers: int, expert_idx: int):
+    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=num_workers, pin_memory=True)
+    stats = init_metrics(dataset.classes)
+    num_experts = len(sr_model.sr_experts)
+
+    if expert_idx < 0 or expert_idx >= num_experts:
+        raise ValueError(f"Invalid expert index {expert_idx}, total experts: {num_experts}")
+
+    with torch.no_grad():
+        for lr_imgs, hr_imgs, labels, _ in tqdm(
+            loader,
+            desc=f"SR(Fixed-{expert_idx})",
+            leave=True,
+            dynamic_ncols=True,
+            file=sys.stdout,
+        ):
+            lr_imgs = lr_imgs.to(device)
+            hr_imgs = hr_imgs.to(device)
+            class_name = dataset.classes[labels.item()]
+
+            sr_out = sr_model.sr_experts[expert_idx](lr_imgs).clamp(0.0, 1.0)
+
+            psnr_val = compute_psnr(sr_out, hr_imgs).item()
+            ssim_val = compute_ssim(sr_out, hr_imgs).item()
+
+            update_metrics(stats, class_name, psnr_val, ssim_val)
+
+    return finalize_metrics(stats)
+
+
 def print_metrics(title: str, results: Dict[str, Dict[str, float]]):
     print(f"\n{title}")
     overall = results["overall"]
@@ -356,52 +387,57 @@ def print_delta(title: str, a: Dict[str, Dict[str, float]], b: Dict[str, Dict[st
 
 def write_results_csv(
     output_path: str,
-    cls_acc: float,
-    thumb_acc: float,
-    cls_names: List[str],
-    thumb_names: List[str],
-    oracle_results: Dict[str, Dict[str, float]],
-    mixed_results: Dict[str, Dict[str, float]],
-    random_results: Dict[str, Dict[str, float]],
+    cls_acc: Optional[float] = None,
+    thumb_acc: Optional[float] = None,
+    cls_names: Optional[List[str]] = None,
+    thumb_names: Optional[List[str]] = None,
+    oracle_results: Optional[Dict[str, Dict[str, float]]] = None,
+    mixed_results: Optional[Dict[str, Dict[str, float]]] = None,
+    random_results: Optional[Dict[str, Dict[str, float]]] = None,
+    fixed_results: Optional[Dict[int, Dict[str, Dict[str, float]]]] = None,
 ):
     rows = []
 
-    rows.append({
-        "section": "classification",
-        "class": "overall",
-        "psnr": "",
-        "ssim": "",
-        "count": "",
-        "acc": f"{cls_acc:.6f}",
-        "notes": "test",
-    })
-    rows.append({
-        "section": "classification",
-        "class": "names",
-        "psnr": "",
-        "ssim": "",
-        "count": "",
-        "acc": "",
-        "notes": ",".join(cls_names),
-    })
-    rows.append({
-        "section": "thumbnail",
-        "class": "overall",
-        "psnr": "",
-        "ssim": "",
-        "count": "",
-        "acc": f"{thumb_acc:.6f}",
-        "notes": "thumb",
-    })
-    rows.append({
-        "section": "thumbnail",
-        "class": "names",
-        "psnr": "",
-        "ssim": "",
-        "count": "",
-        "acc": "",
-        "notes": ",".join(thumb_names),
-    })
+    if cls_acc is not None:
+        rows.append({
+            "section": "classification",
+            "class": "overall",
+            "psnr": "",
+            "ssim": "",
+            "count": "",
+            "acc": f"{cls_acc:.6f}",
+            "notes": "test",
+        })
+    if cls_names is not None:
+        rows.append({
+            "section": "classification",
+            "class": "names",
+            "psnr": "",
+            "ssim": "",
+            "count": "",
+            "acc": "",
+            "notes": ",".join(cls_names),
+        })
+    if thumb_acc is not None:
+        rows.append({
+            "section": "thumbnail",
+            "class": "overall",
+            "psnr": "",
+            "ssim": "",
+            "count": "",
+            "acc": f"{thumb_acc:.6f}",
+            "notes": "thumb",
+        })
+    if thumb_names is not None:
+        rows.append({
+            "section": "thumbnail",
+            "class": "names",
+            "psnr": "",
+            "ssim": "",
+            "count": "",
+            "acc": "",
+            "notes": ",".join(thumb_names),
+        })
 
     def append_metrics(section: str, results: Dict[str, Dict[str, float]]):
         for key, value in results.items():
@@ -415,9 +451,15 @@ def write_results_csv(
                 "notes": "",
             })
 
-    append_metrics("sr_oracle", oracle_results)
-    append_metrics("sr_mixed", mixed_results)
-    append_metrics("sr_random", random_results)
+    if oracle_results is not None:
+        append_metrics("sr_oracle", oracle_results)
+    if mixed_results is not None:
+        append_metrics("sr_mixed", mixed_results)
+    if random_results is not None:
+        append_metrics("sr_random", random_results)
+    if fixed_results is not None:
+        for expert_idx, results in fixed_results.items():
+            append_metrics(f"sr_fixed_{expert_idx}", results)
 
     def append_delta(section: str, a: Dict[str, Dict[str, float]], b: Dict[str, Dict[str, float]]):
         for key in a.keys():
@@ -433,9 +475,15 @@ def write_results_csv(
                 "notes": "",
             })
 
-    append_delta("delta_mixed_oracle", mixed_results, oracle_results)
-    append_delta("delta_random_oracle", random_results, oracle_results)
-    append_delta("delta_random_mixed", random_results, mixed_results)
+    if mixed_results is not None and oracle_results is not None:
+        append_delta("delta_mixed_oracle", mixed_results, oracle_results)
+    if random_results is not None and oracle_results is not None:
+        append_delta("delta_random_oracle", random_results, oracle_results)
+    if random_results is not None and mixed_results is not None:
+        append_delta("delta_random_mixed", random_results, mixed_results)
+    if fixed_results is not None and oracle_results is not None:
+        for expert_idx, results in fixed_results.items():
+            append_delta(f"delta_fixed_{expert_idx}_oracle", results, oracle_results)
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w", newline="", encoding="utf-8") as f:
@@ -449,6 +497,8 @@ def write_results_csv(
 
 def main():
     parser = argparse.ArgumentParser(description="Test classification, SR, and mixed performance.")
+    parser.add_argument("--type", choices=["class", "sr", "fused"], default="fused",
+                        help="Evaluation type: class, sr, or fused (default)")
     parser.add_argument("--class-data", default="./dataset_class", help="Root of classification dataset")
     parser.add_argument("--sr-data", default="./dataset_sr", help="Root of SR dataset")
     parser.add_argument("--class-weights", required=True, help="Path to classifier weights")
@@ -458,6 +508,8 @@ def main():
     parser.add_argument("--class-batch", type=int, default=32)
     parser.add_argument("--sr-batch", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--expert", type=int, choices=[0, 1, 2], default=None,
+                        help="Only evaluate one fixed expert (0/1/2) for SR and skip other SR evaluations")
     parser.add_argument("--seed", type=int, default=608, help="Random seed for reproducibility")
     parser.add_argument("--out-csv", default="eval_results.csv", help="Path to save csv results")
     args = parser.parse_args()
@@ -473,82 +525,141 @@ def main():
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    class_test_dir = os.path.join(args.class_data, "test")
-    if not os.path.isdir(class_test_dir):
-        raise FileNotFoundError(f"Classification test dir not found: {class_test_dir}")
+    run_class = args.type in ("class", "fused")
+    run_sr = args.type in ("sr", "fused")
+    expert_only = args.expert is not None
 
-    sr_test_dir = os.path.join(args.sr_data, "test")
-    if not os.path.isdir(sr_test_dir):
-        raise FileNotFoundError(f"SR test dir not found: {sr_test_dir}")
+    if run_class and not args.class_weights:
+        raise ValueError("--class-weights is required when --type is class or fused")
+    if run_sr and not args.sr_weights:
+        raise ValueError("--sr-weights is required when --type is sr or fused")
+    if run_sr and not expert_only and not args.class_weights:
+        raise ValueError("--class-weights is required for SR mixed evaluation when --expert is not set")
 
-    sr_thumb_dir = os.path.join(args.sr_data, "thumb")
-    if not os.path.isdir(sr_thumb_dir):
-        raise FileNotFoundError(f"SR thumb dir not found: {sr_thumb_dir}")
+    cls_acc: Optional[float] = None
+    cls_names: Optional[List[str]] = None
+    thumb_acc: Optional[float] = None
+    thumb_names: Optional[List[str]] = None
+    oracle_results: Optional[Dict[str, Dict[str, float]]] = None
+    mixed_results: Optional[Dict[str, Dict[str, float]]] = None
+    random_results: Optional[Dict[str, Dict[str, float]]] = None
+    fixed_results: Dict[int, Dict[str, Dict[str, float]]] = {}
 
-    class_dataset = datasets.ImageFolder(
-        root=class_test_dir,
-        transform=transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ]),
-    )
-    num_classes = len(class_dataset.classes)
+    classifier: Optional[ClassNet] = None
+    num_classes: Optional[int] = None
 
-    sr_dataset = FusedSRDatasetWithPaths(
-        sr_test_dir,
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-        ])
-    )
+    if run_class:
+        class_test_dir = os.path.join(args.class_data, "test")
+        if not os.path.isdir(class_test_dir):
+            raise FileNotFoundError(f"Classification test dir not found: {class_test_dir}")
 
-    if num_classes != len(sr_dataset.classes):
-        print("Warning: class count mismatch between classification and SR datasets.")
+        class_dataset = datasets.ImageFolder(
+            root=class_test_dir,
+            transform=transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]),
+        )
+        num_classes = len(class_dataset.classes)
+        classifier = load_classifier(args.class_weights, num_classes, device)
 
-    classifier = load_classifier(args.class_weights, num_classes, device)
-    sr_model = load_sr_system(args.sr_weights, num_classes, args.scale, device)
+        cls_acc, cls_names = evaluate_classifier(
+            classifier, args.class_data, device, args.class_batch, args.num_workers
+        )
+        print(f"Classification Acc: {cls_acc * 100:.2f}%")
+        print(f"Classes: {cls_names}")
 
-    cls_acc, cls_names = evaluate_classifier(
-        classifier, args.class_data, device, args.class_batch, args.num_workers
-    )
+        if args.type == "fused":
+            sr_thumb_dir = os.path.join(args.sr_data, "thumb")
+            if not os.path.isdir(sr_thumb_dir):
+                raise FileNotFoundError(f"SR thumb dir not found: {sr_thumb_dir}")
+            thumb_acc, thumb_names = evaluate_thumb_classifier(
+                classifier, sr_thumb_dir, device, args.class_batch, args.num_workers
+            )
+            print(f"Thumbnail Acc: {thumb_acc * 100:.2f}%")
+            print(f"Thumb Classes: {thumb_names}")
 
-    print(f"Classification Acc: {cls_acc * 100:.2f}%")
-    print(f"Classes: {cls_names}")
+    if run_sr:
+        sr_test_dir = os.path.join(args.sr_data, "test")
+        if not os.path.isdir(sr_test_dir):
+            raise FileNotFoundError(f"SR test dir not found: {sr_test_dir}")
 
-    thumb_acc, thumb_names = evaluate_thumb_classifier(
-        classifier, sr_thumb_dir, device, args.class_batch, args.num_workers
-    )
-    print(f"Thumbnail Acc: {thumb_acc * 100:.2f}%")
-    print(f"Thumb Classes: {thumb_names}")
+        sr_dataset = FusedSRDatasetWithPaths(
+            sr_test_dir,
+            transform=transforms.Compose([
+                transforms.ToTensor(),
+            ])
+        )
 
-    oracle_results = evaluate_sr_oracle(
-        sr_model, sr_dataset, device, args.sr_batch, args.num_workers
-    )
-    print_metrics("SR (Oracle by GT class)", oracle_results)
+        if num_classes is None:
+            num_classes = len(sr_dataset.classes)
+        elif num_classes != len(sr_dataset.classes):
+            print("Warning: class count mismatch between classification and SR datasets.")
 
-    mixed_results = evaluate_sr_mixed(
-        sr_model, classifier, sr_dataset, sr_thumb_dir, device, args.num_workers
-    )
-    print_metrics("SR (Mixed: Thumbnail -> Class -> Expert)", mixed_results)
+        sr_model = load_sr_system(args.sr_weights, num_classes, args.scale, device)
 
-    random_results = evaluate_sr_random(
-        sr_model, sr_dataset, device, args.num_workers
-    )
-    print_metrics("SR (Random Expert)", random_results)
+        if expert_only:
+            if args.expert >= len(sr_model.sr_experts):
+                raise ValueError(
+                    f"--expert {args.expert} out of range for loaded model with {len(sr_model.sr_experts)} experts"
+                )
+            fixed_results[args.expert] = evaluate_sr_fixed_expert(
+                sr_model, sr_dataset, device, args.num_workers, args.expert
+            )
+            print_metrics(f"SR (Fixed Expert {args.expert})", fixed_results[args.expert])
+        else:
+            if classifier is None:
+                classifier = load_classifier(args.class_weights, num_classes, device)
 
-    print_delta("Mixed vs Oracle (Mixed - Oracle)", mixed_results, oracle_results)
-    print_delta("Random vs Oracle (Random - Oracle)", random_results, oracle_results)
-    print_delta("Random vs Mixed (Random - Mixed)", random_results, mixed_results)
+            sr_thumb_dir = os.path.join(args.sr_data, "thumb")
+            if not os.path.isdir(sr_thumb_dir):
+                raise FileNotFoundError(f"SR thumb dir not found: {sr_thumb_dir}")
+
+            oracle_results = evaluate_sr_oracle(
+                sr_model, sr_dataset, device, args.sr_batch, args.num_workers
+            )
+            print_metrics("SR (Oracle by GT class)", oracle_results)
+
+            mixed_results = evaluate_sr_mixed(
+                sr_model, classifier, sr_dataset, sr_thumb_dir, device, args.num_workers
+            )
+            print_metrics("SR (Mixed: Thumbnail -> Class -> Expert)", mixed_results)
+
+            random_results = evaluate_sr_random(
+                sr_model, sr_dataset, device, args.num_workers
+            )
+            print_metrics("SR (Random Expert)", random_results)
+
+            max_fixed = min(3, len(sr_model.sr_experts))
+            if max_fixed < 3:
+                print(f"Warning: only {len(sr_model.sr_experts)} experts found, evaluating 0..{max_fixed - 1}.")
+            for expert_idx in range(max_fixed):
+                fixed_results[expert_idx] = evaluate_sr_fixed_expert(
+                    sr_model, sr_dataset, device, args.num_workers, expert_idx
+                )
+                print_metrics(f"SR (Fixed Expert {expert_idx})", fixed_results[expert_idx])
+
+            print_delta("Mixed vs Oracle (Mixed - Oracle)", mixed_results, oracle_results)
+            print_delta("Random vs Oracle (Random - Oracle)", random_results, oracle_results)
+            print_delta("Random vs Mixed (Random - Mixed)", random_results, mixed_results)
+            for expert_idx, results in fixed_results.items():
+                print_delta(
+                    f"Fixed-{expert_idx} vs Oracle (Fixed-{expert_idx} - Oracle)",
+                    results,
+                    oracle_results,
+                )
 
     write_results_csv(
         args.out_csv,
-        cls_acc,
-        thumb_acc,
-        cls_names,
-        thumb_names,
-        oracle_results,
-        mixed_results,
-        random_results,
+        cls_acc=cls_acc,
+        thumb_acc=thumb_acc,
+        cls_names=cls_names,
+        thumb_names=thumb_names,
+        oracle_results=oracle_results,
+        mixed_results=mixed_results,
+        random_results=random_results,
+        fixed_results=fixed_results,
     )
     print(f"Results saved to CSV: {args.out_csv}")
 

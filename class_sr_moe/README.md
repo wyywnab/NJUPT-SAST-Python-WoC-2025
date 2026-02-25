@@ -17,37 +17,37 @@
 
 - 训练：修改config.yaml后运行train.py
 
-- 评估：
+- 评估(v2)：
 
   ```bash
   python evaluate.py \
-  	--class-data <path/to/classification_dataset>
-  	--sr-data <path/to/dataset>
-  	--class-weights <path/to/classifier_weights>
-  	--sr-weights <path/to/sr(fused)_weights>
-  	--scale 2
-  	--device <cuda_or_cpu>
-  	--class-batch 32
-  	--sr-batch 8
-  	--num_workers 4
-  	--seed <random_seed>
-  	--out-csv <path/to/results_file>
+  	--type <class_sr_or_fused>						# (可选)评估模式，可选 class, sr 或 fused(默认)
+  	--expert <expert_index>							# (可选)评估特定专家，会跳过其他所有评估，空置时全部
+  	--class-data <path/to/classification_dataset> 	# (可选)分类数据集的地址，默认"./dataset_class"
+  	--sr-data <path/to/dataset> 					# (可选)超分数据集的地址，默认"./dataset_sr"
+  	--class-weights <path/to/classifier_weights>	# 分类器权重地址
+  	--sr-weights <path/to/sr(fused)_weights>		# 超分专家权重地址
+  	--device <cuda_or_cpu>							# (可选)选择设备
+  	--class-batch 32								# (可选)设置分类 batch size
+  	--sr-batch 8									# (可选)设置超分 batch size
+  	--num_workers 4									# (可选)设置 cpu workers 数量
+  	--seed <random_seed>							# (可选)设置随机种子用于复现
+  	--out-csv <path/to/results_file>				# (可选)设置输出csv文件
   ```
 
 - 推理：
 
   ```bash
   python inference.py \
-  	--image <path/to/input/single_image>
-  	--output <path/to/output/single_image>
-  	--input-dir <path/to/folder/images>
-  	--output-dir <path/to/output/folder>
-  	--class-weights <path/to/classifier_weights>
-  	--sr-weights <path/to/sr(fused)_weights>
-      --scale 2
-  	--device <cuda_or_cpu>
-  	--patch-size <patch_size_to_split_image>
-  	--overlap <overlap_size_to_crop>
+  	--image <path/to/input/single_image>			# 输入单个图像位置
+  	--output <path/to/output/single_image>			# 输出单个图像位置
+  	--input-dir <path/to/folder/images>				# 输入文件夹（优先）
+  	--output-dir <path/to/output/folder>			# 输出文件夹（优先）
+  	--class-weights <path/to/classifier_weights>	# 分类器权重地址
+  	--sr-weights <path/to/sr(fused)_weights>		# 超分专家权重地址
+  	--device <cuda_or_cpu>							# (可选)选择设备
+  	--patch-size <patch_size_to_split_image>		# (可选)分割图片到patch大小，默认112
+  	--overlap <overlap_size_to_crop>				# (可选)图片边缘重叠裁剪大小，默认16
   ```
 
 ## Web
